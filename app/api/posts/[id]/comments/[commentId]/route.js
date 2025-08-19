@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust this path if it's different
 import { connectToDB } from '@/lib/db';
 import Post from '@/models/Post';
+import pusher from '@/lib/pusher';
 
 // === DELETE: Delete a specific comment from a post ===
 export async function DELETE(request, { params }) {
@@ -42,6 +43,8 @@ export async function DELETE(request, { params }) {
       $pull: { comments: { _id: commentId } }
     });
 
+    await pusher.trigger(`post-${postId}`, "delete-comment", { commentId });
+    
     return NextResponse.json({ message: 'Comment deleted successfully' }, { status: 200 });
 
   } catch (error) {

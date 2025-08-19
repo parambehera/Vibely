@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "../../auth/[...nextauth]/route";
 import User from '@/models/User';
 import { NextResponse } from 'next/server';
+import pusher from "@/lib/pusher";
 
 // ✅ DELETE post (No changes)
 export async function DELETE(req, { params }) {
@@ -24,6 +25,8 @@ export async function DELETE(req, { params }) {
         }
 
         await Post.findByIdAndDelete(params.id);
+        await pusher.trigger("posts", "delete-post", post._id);
+
         return new Response("Post deleted", { status: 200 });
     } catch (err) {
         console.error("[POST_DELETE_ERROR]", err);
@@ -52,7 +55,7 @@ export async function PUT(req, { params }) {
 
         const userId = session.user.id;
         const alreadyLiked = post.likes.some((uid) => uid.toString() === userId);
-
+         
         if (alreadyLiked) {
             post.likes = post.likes.filter((uid) => uid.toString() !== userId);
         } else {
@@ -60,8 +63,9 @@ export async function PUT(req, { params }) {
         }
 
         await post.save();
-        
         // Return the new count of likes
+        await pusher.trigger(`post-${post._id}`, "like-count", post.likes.length);
+        
         return new Response(JSON.stringify({ likesCount: post.likes.length }), {
             status: 200,
         });
@@ -106,7 +110,8 @@ export async function POST(request, { params }) {
             { $push: { comments: newComment } },
             { new: true }
         );
-
+         
+        
         if (!updatedPost) {
             return NextResponse.json({ message: "Post not found" }, { status: 404 });
         }
@@ -127,6 +132,8 @@ export async function POST(request, { params }) {
                 image: authorDetails.image,
             },
         };
+
+        await pusher.trigger(`post-${postId}`, "new-comment", responseComment);
 
         return NextResponse.json(responseComment, { status: 201 });
     } catch (error) {

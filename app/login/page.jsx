@@ -44,14 +44,14 @@ export default function LoginPage() {
       toast.success("Logged in successfully 🎉");
       router.push("/");
     } else {
-      toast.error(res.error || "Invalid email or password");
+      toast.error(res.error || "Invalid email or password or user not found ");
     }
 
     setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4 text-black">
+    <div className="min-h-screen bg-[rgb(244,242,238)] flex items-center justify-center p-4 text-black">
     <div className="w-full max-w-md">
       {/* Header */}
       <div className="text-center mb-8">

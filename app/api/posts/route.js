@@ -6,6 +6,7 @@ import User from '@/models/User';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '../auth/[...nextauth]/route';
 import cloudinary from '@/lib/cloudinary';
+import pusher from '@/lib/pusher';
 
 // Helper for consistent JSON response
 const jsonResponse = (data, status = 200) =>
@@ -50,8 +51,21 @@ export async function POST(req) {
       content,
       image: imageUrl,
     });
+    const newPost = await Post.findById(post._id) 
+      .populate('author', 'name email image username')
+      .populate({
+        path: 'comments',
+        populate: {
+          path: 'user',
+          model: 'User',
+          select: 'name username image',
+        },
+      });
 
-    return jsonResponse({ message: 'Post created successfully', post }, 201);
+      await pusher.trigger("posts", "new-post", newPost.toJSON());
+
+    return jsonResponse({ message: 'Post created successfully', newPost }, 201);
+    
   } catch (err) {
     console.error('[POST ERROR]', err);
     return jsonResponse({ message: 'Error creating post', error: err.message }, 500);

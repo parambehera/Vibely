@@ -6,9 +6,11 @@ import axios from "axios";
 import PostCard from "@/components/PostCard";
 import toast from "react-hot-toast";
 import Landing from "@/components/Landing";
+import Pusher from "pusher-js";
 
 export default function HomePage() {
   const { data: session } = useSession();
+
   const [content, setContent] = useState("");
   const [image, setImage] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -21,22 +23,48 @@ export default function HomePage() {
   const [following, setFollowing] = useState(0);
   const [profileImage, setProfileImage] = useState("");
 
-  // Fetch posts
+  // --- 1️⃣ Fetch existing posts on first render ---
   useEffect(() => {
     const fetchPosts = async () => {
       try {
         const res = await axios.get("/api/posts");
         setPosts(res.data.posts);
-      } catch {
+      } catch (err) {
         toast.error("Failed to fetch posts");
       }
     };
     fetchPosts();
   }, []);
 
-  // Fetch user data
+  // --- 2️⃣ Subscribe to Pusher for real-time posts ---
   useEffect(() => {
-    const handleFetchUserData = async () => {
+    const pusherClient = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER,
+    });
+
+    const channel = pusherClient.subscribe("posts");
+    channel.bind("new-post", (post) => {
+      setPosts((prev) => {
+        if (prev.some((c) => c._id === post._id)) return prev;
+        return [post, ...prev]; // prepend newest
+      });
+    });
+    channel.bind("delete-post", (deletedPostId) => {
+    setPosts((prev) => prev.filter((p) => p._id !== deletedPostId));
+  });
+
+    return () => {
+      channel.unbind_all();
+      channel.unsubscribe();
+      pusherClient.disconnect();
+    };
+  }, []); // run once
+
+  // --- 3️⃣ Fetch user profile ---
+  useEffect(() => {
+    if (!session?.user) return;
+
+    const fetchUser = async () => {
       try {
         const res = await axios.get("/api/user/me");
         const user = res.data;
@@ -49,10 +77,10 @@ export default function HomePage() {
         toast.error("Failed to fetch profile");
       }
     };
-    if (session?.user) handleFetchUserData();
+    fetchUser();
   }, [session?.user]);
 
-  // Create new post
+  // --- 4️⃣ Create new post ---
   const handleCreate = async () => {
     if (!content.trim() && !image) {
       toast.error("Post cannot be empty");
@@ -65,17 +93,12 @@ export default function HomePage() {
       formData.append("content", content);
       if (image) formData.append("image", image);
 
-      const res = await axios.post("/api/posts", formData);
+   const res =  await axios.post("/api/posts", formData); // Pusher triggered by backend
+      setContent("");
+      setImage(null);
       toast.dismiss();
-
-      if (res.status === 201) {
-        setPosts([res.data.post, ...posts]);
-        setContent("");
-        setImage(null);
-        toast.success("Post published 🎉");
-      } else {
-        toast.error(res.data?.message || "Something went wrong.");
-      }
+      if(res.status==201)
+      toast.success("Post published 🎉");
     } catch (err) {
       toast.dismiss();
       toast.error(err?.response?.data?.message || "Failed to create post.");
@@ -84,24 +107,22 @@ export default function HomePage() {
     }
   };
 
-  if (!session?.user) {
-    return <Landing />;
-  }
+  if (!session?.user) return <Landing />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
+    <div className="min-h-screen bg-[rgb(244,242,238)]">
       <div className="container mx-auto px-4 pt-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-[calc(100vh-2rem)]">
           
-          {/* LEFT SIDEBAR - HIDDEN ON MOBILE */}
+          {/* LEFT SIDEBAR */}
           <div className="hidden lg:block lg:col-span-1 lg:sticky lg:top-8 self-start">
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/20 text-center hover:shadow-xl transition-all duration-300">
+            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center hover:shadow-lg transition-all duration-300">
               <div className="relative inline-block">
                 {profileImage ? (
                   <img
                     src={profileImage}
                     alt="Profile"
-                    className="w-20 h-20 rounded-full mx-auto object-cover border-4 border-white shadow-md"
+                    className="w-20 h-20 rounded-full mx-auto object-cover border border-gray-200 shadow-sm"
                   />
                 ) : (
                   <div className="w-20 h-20 bg-gray-200 rounded-full mx-auto"></div>
@@ -109,8 +130,8 @@ export default function HomePage() {
                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 rounded-full border-2 border-white"></div>
               </div>
               <h2 className="text-xl font-bold mt-4 text-gray-800">{name}</h2>
-              <p className="text-sm text-gray-600 mb-4">@{username}</p>
-              <div className="flex justify-around pt-4 border-t border-gray-100">
+              <p className="text-sm text-gray-500 mb-4">@{username}</p>
+              <div className="flex justify-around pt-4 border-t border-gray-200">
                 <div className="text-center">
                   <div className="text-lg font-bold text-gray-800">{followers}</div>
                   <div className="text-xs text-gray-500">Followers</div>
@@ -124,22 +145,23 @@ export default function HomePage() {
           </div>
 
           {/* MAIN FEED */}
-          <div className="order-2 lg:col-span-2 space-y-6 overflow-y-auto pr-2">
+          <div className="order-2 lg:col-span-2 space-y-6 overflow-y-auto no-scrollbar pr-2">
+            
             {/* Create Post */}
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300 text-black">
               <div className="flex items-center space-x-4 mb-4">
                 {profileImage ? (
                   <img
                     src={profileImage}
                     alt="Your avatar"
-                    className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                    className="w-10 h-10 rounded-full object-cover border border-gray-200"
                   />
                 ) : (
                   <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
                 )}
                 <div className="flex-1">
                   <textarea
-                    className="w-full p-4 border border-gray-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-gray-400 bg-gray-50 text-gray-800 placeholder-gray-400"
                     rows="3"
                     placeholder="What's on your mind?"
                     value={content}
@@ -148,7 +170,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <label className="flex items-center space-x-2 cursor-pointer text-gray-600 hover:text-blue-600 transition-colors">
+                <label className="flex items-center space-x-2 cursor-pointer text-gray-500 hover:text-gray-700 transition-colors">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
@@ -165,14 +187,13 @@ export default function HomePage() {
                     className="hidden"
                   />
                 </label>
-
                 <button
                   onClick={handleCreate}
                   disabled={(!content.trim() && !image) || loading}
-                  className={`px-6 py-2 rounded-xl font-medium transition-all duration-200 ${
+                  className={`px-5 py-2 rounded-lg font-medium transition-all duration-200 ${
                     loading || (!content.trim() && !image)
-                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
-                      : "bg-blue-600 hover:bg-blue-700 text-white shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : "bg-black text-white hover:bg-gray-800"
                   }`}
                 >
                   {loading ? (
@@ -187,7 +208,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* Posts */}
+            {/* Posts Feed */}
             <div className="space-y-6 pb-6">
               {posts.map((post) => (
                 <PostCard
@@ -203,19 +224,19 @@ export default function HomePage() {
 
           {/* RIGHT SIDEBAR */}
           <div className="order-3 hidden lg:block lg:col-span-1 lg:sticky lg:top-8 self-start">
-            <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 hover:shadow-lg transition-all duration-300">
               <h3 className="text-lg font-bold text-gray-800 mb-4">Sponsored</h3>
               <div className="space-y-4">
-                <div className="bg-gradient-to-br from-gray-100 to-gray-200 h-32 flex items-center justify-center rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200">
+                <div className="bg-gray-100 h-32 flex items-center justify-center rounded-lg border border-gray-200 hover:shadow-sm transition-all duration-200">
                   <div className="text-center">
                     <div className="w-8 h-8 bg-gray-400 rounded-full mx-auto mb-2"></div>
-                    <span className="text-sm text-gray-600">Ad Banner 1</span>
+                    <span className="text-sm text-gray-500">Ad Banner 1</span>
                   </div>
                 </div>
-                <div className="bg-gradient-to-br from-gray-100 to-gray-200 h-32 flex items-center justify-center rounded-xl border border-gray-200 hover:shadow-md transition-all duration-200">
+                <div className="bg-gray-100 h-32 flex items-center justify-center rounded-lg border border-gray-200 hover:shadow-sm transition-all duration-200">
                   <div className="text-center">
-                    <div className="w-8 h-8 bg-gray-400 rounded-full mx-auto mb-2"></div>
-                    <span className="text-sm text-gray-600">Ad Banner 2</span>
+                    <div className="w-8 h-8 bg-gray-500 rounded-full mx-auto mb-2"></div>
+                    <span className="text-sm text-gray-500">Ad Banner 2</span>
                   </div>
                 </div>
               </div>

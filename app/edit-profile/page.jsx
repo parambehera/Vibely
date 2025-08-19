@@ -89,7 +89,7 @@ export default function EditProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 py-8 text-black">
+    <div className="min-h-screen bg-[rgb(244,242,238)] py-8 text-black">
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center gap-4 mb-8">
         <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">

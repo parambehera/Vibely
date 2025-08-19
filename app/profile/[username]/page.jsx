@@ -103,7 +103,7 @@ export default async function ProfilePage({ params }) {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-[rgb(244,242,238)]">
       <div className="max-w-4xl mx-auto p-3 sm:p-4 md:p-6 lg:p-8">
         <div className="bg-white/80 backdrop-blur-sm shadow-xl rounded-2xl p-4 sm:p-6 md:p-8 border border-white/20 flex flex-col lg:flex-row items-center lg:items-start gap-4 sm:gap-6 md:gap-8">
           <div className="relative flex-shrink-0">
